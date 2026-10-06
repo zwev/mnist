@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Handwritten Digit Classifier</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #fbfcfd;
+    --grid: #e3ebf3;
+    --ink: #1b2a41;
+    --muted: #5b6b80;
+    --blue: #2f5bea;
+    --pad: #10161f;
+    --panel: #ffffff;
+    --line: #d5dee8;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #121821;
+      --grid: #1a2330;
+      --ink: #e6ecf3;
+      --muted: #9aa8b9;
+      --blue: #7d9bff;
+      --pad: #05080c;
+      --panel: #18202b;
+      --line: #2a3544;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    color: var(--ink);
+    background-color: var(--paper);
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+  main { max-width: 760px; margin: 0 auto; padding: 56px 24px 80px; }
+  h1 { font-size: 2.6rem; line-height: 1.1; letter-spacing: -0.02em; margin: 0 0 12px; font-weight: 700; }
+  h2 { font-size: 1.35rem; margin: 48px 0 8px; font-weight: 600; }
+  p { margin: 0 0 14px; max-width: 64ch; }
+  .lede { font-size: 1.15rem; color: var(--muted); }
+  a { color: var(--blue); }
+  a:focus-visible, button:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+
+  /* Demo */
+  .demo {
+    margin-top: 32px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 20px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 24px;
+  }
+  .pad-wrap { display: flex; flex-direction: column; gap: 10px; }
+  #pad {
+    width: 280px; height: 280px;
+    background: var(--pad);
+    border-radius: 10px;
+    touch-action: none;
+    cursor: crosshair;
+    display: block;
+  }
+  .pad-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .hint { font-size: 0.9rem; color: var(--muted); }
+  button {
+    font: inherit; font-size: 0.95rem; font-weight: 500;
+    color: var(--ink); background: transparent;
+    border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 14px; cursor: pointer;
+  }
+  button:hover { border-color: var(--muted); }
+
+  .results { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .guess { display: flex; align-items: center; gap: 16px; }
+  .guess-digit {
+    font-size: 4.2rem; font-weight: 700; line-height: 1;
+    width: 72px; text-align: center; color: var(--blue);
+    font-variant-numeric: tabular-nums;
+  }
+  .guess-text { font-size: 0.95rem; color: var(--muted); }
+  .guess-text strong { color: var(--ink); font-weight: 600; }
+  .seen { display: flex; align-items: center; gap: 12px; font-size: 0.9rem; color: var(--muted); }
+  #seen {
+    width: 84px; height: 84px; image-rendering: pixelated;
+    background: #000; border-radius: 4px; flex-shrink: 0;
+  }
+  .bars { display: grid; grid-template-columns: 1.2em 1fr 3.2em; gap: 4px 10px; align-items: center; font-size: 0.9rem; font-variant-numeric: tabular-nums; }
+  .bar { height: 10px; background: var(--grid); border-radius: 5px; overflow: hidden; }
+  .bar span { display: block; height: 100%; width: 0; background: var(--muted); border-radius: 5px; transition: width 120ms ease-out; }
+  .bar.top span { background: var(--blue); }
+  .pct { text-align: right; color: var(--muted); }
+  .status { font-size: 0.9rem; color: var(--muted); }
+  .status.error { color: #c0392b; }
+
+  /* Content */
+  ol { padding-left: 1.3em; margin: 0 0 14px; max-width: 64ch; }
+  li { margin-bottom: 6px; }
+  table { border-collapse: collapse; font-size: 0.95rem; margin: 8px 0 14px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: left; padding: 6px 18px 6px 0; border-bottom: 1px solid var(--line); }
+  th { font-weight: 600; }
+  .table-wrap { overflow-x: auto; }
+  footer { margin-top: 56px; font-size: 0.9rem; color: var(--muted); }
+
+  @media (max-width: 640px) {
+    main { padding-top: 36px; }
+    h1 { font-size: 2rem; }
+    .demo { grid-template-columns: 1fr; }
+    #pad { width: 100%; height: auto; aspect-ratio: 1; max-width: 340px; }
+  }
+  @media (prefers-reduced-motion: reduce) { .bar span { transition: none; } }
+
+  /* Embed mode (?embed in the URL): show only the demo, for iframes */
+  body.embed { background: var(--paper); }
+  body.embed main { padding: 0; max-width: none; }
+  body.embed .content { display: none; }
+  body.embed .demo { margin: 0; border: none; border-radius: 0; }
+</style>
+</head>
+<body>
+<main>
+  <header class="content">
+    <h1>Handwritten digit classifier</h1>
+    <p class="lede">A small neural network trained on the MNIST dataset of handwritten digits. Draw a number below and see what it thinks you wrote. Everything runs in your browser.</p>
+  </header>
+
+  <section class="demo" aria-label="Digit drawing demo">
+    <div class="pad-wrap">
+      <canvas id="pad" width="280" height="280" aria-label="Drawing area. Draw a digit from 0 to 9."></canvas>
+      <div class="pad-row">
+        <span class="hint">Draw one digit, large and centered</span>
+        <button id="clear" type="button">Clear</button>
+      </div>
+    </div>
+    <div class="results">
+      <div class="guess">
+        <div class="guess-digit" id="guess">?</div>
+        <div class="guess-text" id="guess-text">Loading the model…</div>
+      </div>
+      <div class="bars" id="bars"></div>
+      <div class="seen">
+        <canvas id="seen" width="28" height="28"></canvas>
+        <span>What the model sees: your drawing shrunk to 28×28 pixels and centered, like the training images.</span>
+      </div>
+      <div class="status" id="status" role="status"></div>
+    </div>
+  </section>
+
+  <div class="content">
+    <h2>How it works</h2>
+    <p>Each MNIST image is a 28×28 grayscale picture of a single digit, white on black. Before your drawing reaches the model, it goes through the same steps the dataset used:</p>
+    <ol>
+      <li>Crop to the area you drew in.</li>
+      <li>Scale it so the longer side is 20 pixels, keeping its shape.</li>
+      <li>Place it on a 28×28 canvas, centered by its center of mass.</li>
+      <li>Scale pixel values to between 0 and 1 and flatten them into a list of 784 numbers.</li>
+    </ol>
+    <p>The model outputs a probability for each digit, shown in the bars above.</p>
+
+    <h2>The model</h2>
+    <p>A fully connected network built with Keras. The trained weights are exported to a small JSON file, and a few lines of plain JavaScript run the network in your browser, with no machine learning library needed.</p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Layer</th><th>Size</th><th>Activation</th></tr></thead>
+        <tbody>
+          <tr><td>Input</td><td>784 pixels</td><td>–</td></tr>
+          <tr><td>Hidden</td><td>10 units</td><td>ReLU</td></tr>
+          <tr><td>Hidden</td><td>10 units</td><td>ReLU</td></tr>
+          <tr><td>Output</td><td>10 classes</td><td>Softmax</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <!-- TODO: replace XX.X% with the test accuracy from your notebook -->
+    <p>Trained for 10 epochs on 54,000 images with the Adam optimizer (learning rate 0.01), holding out 10% for validation. It reaches XX.X% accuracy on the 10,000-image test set.</p>
+
+    <h2>Where it struggles</h2>
+    <p>With only two hidden layers of 10 units, the network is deliberately small, and drawings made with a mouse or finger are messier than the scanned handwriting it learned from. Try drawing a 4 with an open top, or a 7 with a crossbar, and watch its confidence drop. A convolutional network, which looks at local patterns of pixels instead of each pixel independently, would handle these cases much better.</p>
+
+    <footer>
+      <!-- TODO: point these at your repo and portfolio -->
+      <a href="https://github.com/your-username/your-repo">View the code on GitHub</a>
+      &nbsp;&nbsp;
+      <a href="https://your-portfolio.wordpress.com">Back to portfolio</a>
+    </footer>
+  </div>
+</main>
+
+<script>
+(() => {
+  const MODEL_URL = "weights.json";
+
+  if (new URLSearchParams(location.search).has("embed")) document.body.classList.add("embed");
+
+  const pad = document.getElementById("pad");
+  const ctx = pad.getContext("2d");
+  const seen = document.getElementById("seen");
+  const seenCtx = seen.getContext("2d");
+  const guessEl = document.getElementById("guess");
+  const guessText = document.getElementById("guess-text");
+  const barsEl = document.getElementById("bars");
+  const statusEl = document.getElementById("status");
+  let model = null;
+
+  // Probability bars for 0-9
+  const bars = [];
+  for (let d = 0; d < 10; d++) {
+    const label = document.createElement("span"); label.textContent = d;
+    const bar = document.createElement("div"); bar.className = "bar";
+    const fill = document.createElement("span"); bar.appendChild(fill);
+    const pct = document.createElement("span"); pct.className = "pct"; pct.textContent = "–";
+    barsEl.append(label, bar, pct);
+    bars.push({ bar, fill, pct });
+  }
+
+  // Drawing: white strokes on black, matching MNIST
+  function resetPad() {
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, pad.width, pad.height);
+    seenCtx.fillStyle = "#000";
+    seenCtx.fillRect(0, 0, 28, 28);
+    guessEl.textContent = "?";
+    if (model) guessText.innerHTML = "Draw a digit to see a prediction.";
+    bars.forEach(b => { b.fill.style.width = "0"; b.pct.textContent = "–"; b.bar.classList.remove("top"); });
+  }
+  ctx.lineWidth = 20;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "#fff";
+
+  let drawing = false, last = null, pending = false;
+  const pos = e => {
+    const r = pad.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * pad.width / r.width, y: (e.clientY - r.top) * pad.height / r.height };
+  };
+  pad.addEventListener("pointerdown", e => {
+    drawing = true; last = pos(e); pad.setPointerCapture(e.pointerId);
+    ctx.beginPath(); ctx.arc(last.x, last.y, ctx.lineWidth / 2, 0, Math.PI * 2); ctx.fillStyle = "#fff"; ctx.fill();
+    schedule();
+  });
+  pad.addEventListener("pointermove", e => {
+    if (!drawing) return;
+    const p = pos(e);
+    ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+    last = p; schedule();
+  });
+  const stop = () => { if (drawing) { drawing = false; schedule(); } };
+  pad.addEventListener("pointerup", stop);
+  pad.addEventListener("pointercancel", stop);
+  document.getElementById("clear").addEventListener("click", resetPad);
+
+  function schedule() {
+    if (pending) return;
+    pending = true;
+    requestAnimationFrame(() => { pending = false; predict(); });
+  }
+
+  // Preprocess like MNIST: crop, fit longer side to 20px, center by mass in 28x28
+  const tmp = document.createElement("canvas");
+  tmp.width = tmp.height = 28;
+  const tmpCtx = tmp.getContext("2d");
+
+  function toMnist() {
+    const { data, width, height } = ctx.getImageData(0, 0, pad.width, pad.height);
+    let minX = width, minY = height, maxX = -1, maxY = -1;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (data[(y * width + x) * 4] > 30) {
+          if (x < minX) minX = x; if (x > maxX) maxX = x;
+          if (y < minY) minY = y; if (y > maxY) maxY = y;
+        }
+      }
+    }
+    if (maxX < 0) return null;
+    const w = maxX - minX + 1, h = maxY - minY + 1;
+    const scale = 20 / Math.max(w, h);
+    const nw = Math.max(1, Math.round(w * scale)), nh = Math.max(1, Math.round(h * scale));
+
+    tmpCtx.fillStyle = "#000"; tmpCtx.fillRect(0, 0, 28, 28);
+    tmpCtx.imageSmoothingEnabled = true; tmpCtx.imageSmoothingQuality = "high";
+    tmpCtx.drawImage(pad, minX, minY, w, h, Math.floor((28 - nw) / 2), Math.floor((28 - nh) / 2), nw, nh);
+
+    // Shift so the center of mass sits at the middle
+    const small = tmpCtx.getImageData(0, 0, 28, 28).data;
+    let total = 0, sx = 0, sy = 0;
+    for (let y = 0; y < 28; y++) for (let x = 0; x < 28; x++) {
+      const v = small[(y * 28 + x) * 4]; total += v; sx += v * x; sy += v * y;
+    }
+    const dx = Math.round(14 - sx / total), dy = Math.round(14 - sy / total);
+
+    seenCtx.fillStyle = "#000"; seenCtx.fillRect(0, 0, 28, 28);
+    seenCtx.drawImage(tmp, dx, dy);
+    const out = seenCtx.getImageData(0, 0, 28, 28).data;
+    const pixels = new Float32Array(784);
+    for (let i = 0; i < 784; i++) pixels[i] = out[i * 4] / 255;
+    return pixels;
+  }
+
+  function predict() {
+    if (!model) return;
+    const pixels = toMnist();
+    if (!pixels) return;
+    const probs = forward(pixels);
+    let best = 0;
+    for (let d = 1; d < 10; d++) if (probs[d] > probs[best]) best = d;
+    guessEl.textContent = best;
+    guessText.innerHTML = `<strong>${(probs[best] * 100).toFixed(0)}% confident</strong> it's a ${best}`;
+    bars.forEach((b, d) => {
+      const p = probs[d] * 100;
+      b.fill.style.width = p.toFixed(1) + "%";
+      b.pct.textContent = p < 1 ? "<1%" : p.toFixed(0) + "%";
+      b.bar.classList.toggle("top", d === best);
+    });
+  }
+
+  // Run the network: each dense layer computes activation(inputs x W + b)
+  function forward(input) {
+    let a = input;
+    for (const L of model.layers) {
+      const out = new Float32Array(L.out);
+      for (let j = 0; j < L.out; j++) {
+        let sum = L.b[j];
+        for (let i = 0; i < L.in; i++) sum += a[i] * L.W[i * L.out + j];
+        out[j] = sum;
+      }
+      if (L.activation === "relu") {
+        for (let j = 0; j < L.out; j++) if (out[j] < 0) out[j] = 0;
+      } else if (L.activation === "softmax") {
+        const max = Math.max(...out);
+        let total = 0;
+        for (let j = 0; j < L.out; j++) { out[j] = Math.exp(out[j] - max); total += out[j]; }
+        for (let j = 0; j < L.out; j++) out[j] /= total;
+      }
+      a = out;
+    }
+    return a;
+  }
+
+  resetPad();
+  fetch(MODEL_URL)
+    .then(res => { if (!res.ok) throw new Error(res.status); return res.json(); })
+    .then(m => { model = m; guessText.innerHTML = "Draw a digit to see a prediction."; })
+    .catch(err => {
+      console.error(err);
+      guessText.textContent = "Model didn't load.";
+      statusEl.classList.add("error");
+      statusEl.textContent = location.protocol === "file:"
+        ? "Browsers block loading the model from a file on your computer. Open this page through a web server, such as GitHub Pages or python -m http.server."
+        : `Couldn't load ${MODEL_URL}. Check that weights.json sits in the same folder as this page.`;
+    });
+})();
+</script>
+</body>
+</html>
